@@ -183,8 +183,8 @@
 
 ### On-demand загрузка
 
-Не держите всё в контексте. Только 4 @includes (USER.md, rules.md, decisions.md,
-handoff.md). Остальное (AGENTS.md, TOOLS.md, MEMORY.md, LEARNINGS.md) -- через
+Не держите всё в контексте. Свои @includes: USER.md, rules.md, decisions.md,
+handoff.md, плюс строки, которые поставил установщик (их не удаляйте). Остальное (AGENTS.md, TOOLS.md, MEMORY.md, LEARNINGS.md) -- через
 Read tool по запросу. Это экономит ещё ~15--20KB на каждую сессию.
 
 **Почему код-комментарии на английском:** стандарт индустрии. Если код попадёт
