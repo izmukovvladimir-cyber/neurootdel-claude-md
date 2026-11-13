@@ -118,9 +118,9 @@ SOUL -- самая важная секция. Она определяет, **к�
 ### Правило инициации
 
 ```markdown
-**Правило инициации:** Я НЕ инициирую общение с оператором.
-Только отвечаю на триггеры (сообщение, задача, событие).
-Никаких «просто проверяю», никаких проактивных пингов.
+**Правило инициации:** первым пишу оператору только по будильнику, который я сам
+себе поставил на обещанную проверку (скилл quick-reminders, `create.sh --wake`).
+Рассылок по расписанию без слова оператора не делаю, никаких «просто проверяю».
 ```
 
 ---
@@ -132,11 +132,12 @@ SOUL -- самая важная секция. Она определяет, **к�
 
 ### Паттерн @include
 
-Claude Code поддерживает `@`-ссылки на файлы. Свои четыре обязательных
-@include ставьте в конце CLAUDE.md:
+Claude Code поддерживает `@`-ссылки на файлы. Установщик Нейроотдела ставит в конец
+CLAUDE.md пять своих @include:
 
 ```markdown
 @core/USER.md
+@core/TONE_OF_VOICE.md
 @core/rules.md
 @core/warm/decisions.md
 @core/hot/handoff.md
@@ -148,7 +149,7 @@ Claude Code поддерживает `@`-ссылки на файлы. Свои 
 **Строки установщика не трогайте.** Установщик Нейроотдела добавляет свои @-строки
 (`@~/.claude-lab/shared/team-rules.md`, `@core/TONE_OF_VOICE.md` и другие) и блоки между
 метками `<!-- ...:begin -->` и `<!-- ...:end -->`. Через них грузятся правила команды.
-Их не удаляют, не переставляют и в число четырёх не считают. Вес проверяйте замером
+Их не удаляют и не переставляют. Вес проверяйте замером
 (`include_weight.py`), а не подсчётом строк.
 
 ### Таблица слоёв
@@ -160,7 +161,7 @@ Claude Code поддерживает `@`-ссылки на файлы. Свои 
 |---|---|---|
 | IDENTITY | CLAUDE.md, USER.md, rules.md | да, @include |
 | WARM | decisions.md (14 дней) | да, @include |
-| HOT | handoff.md (последние 10 записей) | да, @include |
+| HOT | handoff.md (только открытые дела) | да, @include |
 | COLD | MEMORY.md, LEARNINGS.md | нет, Read tool |
 | TOOLS | TOOLS.md, AGENTS.md | нет, Read tool |
 | L4 | Семантический поиск | по запросу |
@@ -168,12 +169,14 @@ Claude Code поддерживает `@`-ссылки на файлы. Свои 
 
 ### Принцип ротации
 
-- **HOT:** gateway/скрипт пишет в recent.md -> хук извлекает последние 10 записей в handoff.md
+- **HOT:** плагин пишет журнал в recent.md (не в @include); handoff.md держит только открытые
+  дела, закрытое удаляется и оставляет 2-4 строки в decisions.md. Перед ночным сбросом
+  agent-handoff-flush.py кладёт последние 15 действий в core/archive/last-actions.md
 - **WARM:** решения старше 14 дней ротируются в MEMORY.md (COLD)
 - **COLD:** архив, загружается по запросу через Read tool
 
 ```markdown
-HOT: gateway -> recent.md -> хук -> handoff.md (последние 10)
+HOT: плагин -> recent.md (журнал); handoff.md = открытые дела; flush -> archive/last-actions.md
 WARM -> COLD: скрипт ротирует записи >14 дней
 ```
 
@@ -199,17 +202,21 @@ handoff.md, TOOLS.md, MEMORY.md) -- на английском.
 
 За 100 сессий это экономит ~300 000 токенов только на @includes.
 
-### Правило 2: Максимум 4 @includes
+### Правило 2: @includes только из набора установщика
 
 ```markdown
-@core/USER.md          # ~200 токенов
-@core/rules.md         # ~400 токенов
-@core/warm/decisions.md # ~1000 токенов
-@core/hot/handoff.md   # ~500 токенов
+@core/USER.md
+@core/TONE_OF_VOICE.md
+@core/rules.md
+@core/warm/decisions.md
+@core/hot/handoff.md
 ```
 
-Всё остальное (AGENTS.md, TOOLS.md, MEMORY.md, LEARNINGS.md) -- через Read tool
-по запросу. Экономия: ~15--20KB контекста на каждой сессии.
+Плюс строки установщика между метками (team-rules.md, TOOLS-root-requests.md).
+Своё в @include без замера не добавляйте. Всё остальное (AGENTS.md, TOOLS.md, MEMORY.md,
+LEARNINGS.md) -- через Read tool по запросу. Потолки сторожа памяти: handoff.md и
+decisions.md по 15 КБ, rules.md 30 КБ, CLAUDE.md 40 КБ, весь ход 100 КБ
+(`include_weight.py`).
 
 ### Правило 3: Авто-компакт
 
@@ -259,7 +266,7 @@ handoff.md, TOOLS.md, MEMORY.md) -- на английском.
 **Пирамида (от слабого к сильному):**
 
 1. Память сессии -- теряется при компакте/сбросе
-2. episodes.jsonl -- скоринг топ-5 при старте, затухает через 30 дней
+2. Feedback-заметки в авто-памяти -- поправки владельца (feedback-note.py), индекс MEMORY.md
 3. TOOLS.md / SKILL.md -- находится по запросу
 4. CLAUDE.md / rules.md -- всегда в контексте
 5. Скрипты / Хуки -- выполняются автоматически, без участия агента
@@ -284,7 +291,8 @@ handoff.md, TOOLS.md, MEMORY.md) -- на английском.
 
 - **RED (только оператор):** CLAUDE.md, rules.md, USER.md
 - **YELLOW (с обоснованием):** AGENTS.md, TOOLS.md, decisions.md
-- **GREEN (автономно):** LEARNINGS.md, SKILL.md, feedback-файлы
+- **GREEN (автономно):** SKILL.md, feedback-заметки авто-памяти (поправка владельца идёт
+  только туда, через feedback-note.py, не в LEARNINGS.md)
 ```
 
 **Почему RED-зона:** если агент может менять свой CLAUDE.md -- он может
@@ -358,7 +366,7 @@ handoff.md, TOOLS.md, MEMORY.md) -- на английском.
 │   │   └── decisions.md   <- решения за 14 дней (@include)
 │   └── hot/
 │       ├── recent.md      <- полный журнал 24ч
-│       └── handoff.md     <- последние 10 записей (@include)
+│       └── handoff.md     <- только открытые дела (@include)
 ├── tools/
 │   └── TOOLS.md           <- серверы, API, пути (on-demand)
 ├── agents/                <- определения субагентов
@@ -417,7 +425,8 @@ CLAUDE.md на 500 строк -- это антипаттерн. Разделяй
 
 ### 2. Слишком много @includes
 
-Максимум 4: USER.md, rules.md, decisions.md, handoff.md.
+Набор установщика: USER.md, TONE_OF_VOICE.md, rules.md, decisions.md, handoff.md и его
+строки между метками. Своё сверху только после замера `include_weight.py`.
 Всё остальное -- on-demand через Read tool. Каждый @include -- это токены.
 
 ### 3. Нет приоритета правил
@@ -451,7 +460,7 @@ CLAUDE.md на 500 строк -- это антипаттерн. Разделяй
 - [ ] SOUL секция (роль, характер, стиль)
 - [ ] Принципы агента
 - [ ] Координация (субагенты, кросс-ревью, инициация)
-- [ ] 4 @includes (USER.md, rules.md, decisions.md, handoff.md)
+- [ ] 5 @includes установщика (USER.md, TONE_OF_VOICE.md, rules.md, decisions.md, handoff.md) и его строки между метками на месте
 - [ ] Таблица слоёв памяти
 - [ ] Иерархия данных
 - [ ] Самоулучшение (пирамида надёжности)
